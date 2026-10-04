@@ -45,3 +45,8 @@ sudo ./install/rebuild-dtb.sh /boot/<你的>.dtb   # 相机电源域（重启生
 - 设备自带传感器（加速度计/陀螺/光线）稳定
 - 摄像头 **通路正常**（libcamera 能枚举、软件 ISP 就绪），但模组像素输出为
   硬件问题（见 SUMMARY 第三节）
+
+
+##本项目由DeepSeek V4.1 Flash开发，已在设备上通过测试
+<img width="1468" height="283" alt="image" src="https://github.com/user-attachments/assets/2156aece-9a67-4d34-98fc-683a5bea75ec" />
+
