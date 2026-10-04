@@ -1,10 +1,10 @@
 # MateBook E 2019 (PAK-AL09 / sdm850) — Arch Linux ARM 支持包
 
-给同型号机器的可直接套用补丁集。详见 `SUMMARY.md`。
+给同型号机器的可直接套用补丁集。详见 [SUMMARY.md](SUMMARY.md)
 
-TODO
-- 修复Gnome Snapshot中后置摄像头取景无法对焦和颜色问题
-
+**TODO**
+1. 修复Gnome Snapshot中后置摄像头取景无法对焦和颜色问题
+  ![Image](Screenshot_20261004_203248.png)
 
 ## 结构
 
