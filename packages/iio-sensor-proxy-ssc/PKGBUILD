@@ -1,0 +1,19 @@
+# iio-sensor-proxy with the libssc (Qualcomm SSC) accelerometer fix.
+# The fix makes client_add() always start the sensor, otherwise the SSC
+# accelerometer is never started when several clients claim it.
+pkgname=iio-sensor-proxy-ssc
+pkgver=3.9
+pkgrel=1
+pkgdesc="IIO sensors to D-Bus proxy (libssc/SSC accelerometer start fix)"
+arch=('aarch64')
+url="https://gitlab.freedesktop.org/hadess/iio-sensor-proxy"
+license=('GPL3')
+depends=('libssc' 'libgudev' 'polkit')
+makedepends=('meson' 'ninja' 'gtk-doc')
+source=("$pkgname-$pkgver.tar.gz::https://gitlab.freedesktop.org/hadess/iio-sensor-proxy/-/archive/3.9/iio-sensor-proxy-3.9.tar.gz"
+        "iio-sensor-proxy-ssc-accel-fix.patch")
+sha256sums=('SKIP' 'SKIP')
+
+prepare() { cd "iio-sensor-proxy-3.9"; patch -p1 -N < "$srcdir/iio-sensor-proxy-ssc-accel-fix.patch"; }
+build()   { cd "iio-sensor-proxy-3.9"; meson setup build --prefix=/usr -Dssc-support=enabled; ninja -C build; }
+package() { cd "iio-sensor-proxy-3.9"; DESTDIR="$pkgdir" ninja -C build install; }

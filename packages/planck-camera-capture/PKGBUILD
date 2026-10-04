@@ -1,0 +1,14 @@
+# Single-frame rear-camera capture for the MateBook E 2019.
+pkgname=planck-camera-capture
+pkgver=1
+pkgrel=1
+pkgdesc="Capture a frame from the MateBook E 2019 rear camera (qcom-camss) to a PNG"
+arch=('any')
+license=('MIT')
+depends=('v4l-utils' 'ffmpeg')
+source=('planck-camera-capture')
+sha256sums=('SKIP')
+
+package() {
+	install -Dm0755 "$srcdir/planck-camera-capture" "$pkgdir/usr/local/bin/planck-camera-capture"
+}

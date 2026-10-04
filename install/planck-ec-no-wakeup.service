@@ -1,0 +1,11 @@
+[Unit]
+Description=Disable the Huawei EC wakeup source (so s2idle can stay asleep)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/planck-ec-no-wakeup.sh
+
+[Install]
+WantedBy=multi-user.target

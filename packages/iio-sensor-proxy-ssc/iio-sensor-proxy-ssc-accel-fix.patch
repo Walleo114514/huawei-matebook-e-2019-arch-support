@@ -1,0 +1,48 @@
+diff --git a/src/drv-ssc-accel.c b/src/drv-ssc-accel.c
+index 4130657..264211d 100644
+--- a/src/drv-ssc-accel.c
++++ b/src/drv-ssc-accel.c
+@@ -56,6 +56,8 @@ measurement_cb (SSCSensorAccelerometer *sensor, gfloat accel_x, gfloat accel_y,
+ 	AccelReadings readings;
+ 	AccelVec3 tmp;
+ 
++	g_debug ("SSC accel measurement: %f %f %f", accel_x, accel_y, accel_z);
++
+ 	tmp.x = accel_x;
+ 	tmp.y = accel_y;
+ 	tmp.z = accel_z;
+@@ -103,6 +105,8 @@ ssc_accelerometer_set_polling (SensorDevice *sensor_device, gboolean state)
+ {
+ 	DrvData *drv_data = (DrvData *) sensor_device->priv;
+ 	g_autoptr(GError) error = NULL;
++	g_debug ("ssc_accelerometer_set_polling state=%d measurement_id=%lu sensor=%p",
++		 state, (unsigned long) drv_data->measurement_id, (void *) drv_data->sensor);
+ 	if (state) {
+ 		if (drv_data->measurement_id)
+ 			return;
+diff --git a/src/iio-sensor-proxy.c b/src/iio-sensor-proxy.c
+index 9c7e8cd..7f65a4d 100644
+--- a/src/iio-sensor-proxy.c
++++ b/src/iio-sensor-proxy.c
+@@ -525,6 +525,9 @@ handle_generic_method_call (SensorData            *data,
+ 		if (driver_type_exists (data, driver_type)) {
+ 			SensorDevice *sensor_device = DEVICE_FOR_TYPE(driver_type);
+ 
++			g_debug ("client_add: driver_type=%d exists=1 ht_size=%u",
++				 driver_type, g_hash_table_size (ht));
++
+ 			/* No other clients for this sensor? Start it */
+ 			if (g_hash_table_size (ht) == 1) {
+ 				/* Return the dbus invocation only after we receive the first
+@@ -545,6 +548,11 @@ handle_generic_method_call (SensorData            *data,
+ 				 * invocation immediately. */
+ 				g_dbus_method_invocation_return_value (invocation, NULL);
+ 			}
++
++			/* Make sure the sensor is actually running: some drivers (the
++			 * libssc accelerometer) can be left unstarted when several
++			 * clients claim it before the first polling request. */
++			driver_set_polling (sensor_device, TRUE);
+ 		} else {
+ 			g_dbus_method_invocation_return_value (invocation, NULL);
+ 		}

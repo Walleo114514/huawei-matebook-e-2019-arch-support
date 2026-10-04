@@ -1,0 +1,187 @@
+#!/usr/bin/env python3
+# Ambient-light auto-brightness for the Huawei MateBook E 2019 (PAK-AL09).
+#
+# The Qualcomm SSC exposes the LTR578 ambient light sensor through
+# iio-sensor-proxy (libssc).  KDE PowerDevil has no ambient-light support on
+# its own, so this small daemon bridges the two: it claims the light sensor,
+# smooths the lux reading and drives PowerDevil's BrightnessControl.
+#
+# Runs as a systemd *user* service (planck-autobrightness.service).
+
+import math
+import sys
+import time
+
+import dbus
+import dbus.mainloop.glib
+from gi.repository import GLib
+
+dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+
+SENSOR_SVC = "net.hadess.SensorProxy"
+SENSOR_PATH = "/net/hadess/SensorProxy"
+SENSOR_IFACE = "net.hadess.SensorProxy"
+PROPS_IFACE = "org.freedesktop.DBus.Properties"
+
+PD_SVC = "org.kde.Solid.PowerManagement"
+PD_PATH = "/org/kde/Solid/PowerManagement/Actions/BrightnessControl"
+PD_IFACE = "org.kde.Solid.PowerManagement.Actions.BrightnessControl"
+
+# ---- tuning -------------------------------------------------------------
+MIN_LUX = 5.0          # lux at/below which MIN_FRAC is used
+MAX_LUX = 2000.0       # lux at/above which full brightness is used
+MIN_FRAC = 0.10        # darkest screen fraction
+EMA = 0.35             # low-pass factor for the lux reading (0 < EMA <= 1)
+HYST_FRAC = 0.02       # ignore brightness changes smaller than this fraction
+MANUAL_PAUSE = 20.0    # seconds to leave the user alone after a manual change
+POLL = 2.0             # seconds between light sensor polls
+RESUME_DELAY = 6.0     # ignore readings right after iio-sensor-proxy restarts
+# -------------------------------------------------------------------------
+
+
+def log(*a):
+    print("[autobrightness]", *a, flush=True)
+
+
+class AutoBrightness:
+    def __init__(self):
+        self.bus = dbus.SessionBus()
+        self.system_bus = dbus.SystemBus()
+        self.pd = dbus.Interface(self.bus.get_object(PD_SVC, PD_PATH), PD_IFACE)
+
+        self.bmax = int(self.pd.brightnessMax())
+        self.bmin = int(self.pd.brightnessMin())
+        self.safe_min = int(self.pd.knownSafeBrightnessMin())
+        self.min_abs = max(self.bmin, self.safe_min)
+
+        self.ema = None
+        self._setting = None
+        self.manual_until = 0.0
+        self.suspend_until = 0.0
+        self.claimed = False
+
+        self.bus.add_signal_receiver(
+            self._on_pd_change, signal_name="brightnessChanged",
+            dbus_interface=PD_IFACE, path=PD_PATH,
+        )
+        self.system_bus.add_signal_receiver(
+            self._on_name_owner, signal_name="NameOwnerChanged",
+            dbus_interface="org.freedesktop.DBus", arg0=SENSOR_SVC,
+        )
+
+    # ---- sensor ---------------------------------------------------------
+    def _claim_iface(self):
+        # Fresh proxy every time: iio-sensor-proxy may have restarted.
+        return dbus.Interface(
+            self.system_bus.get_object(SENSOR_SVC, SENSOR_PATH), SENSOR_IFACE
+        )
+
+    def _ensure_claim(self):
+        # ClaimLight is idempotent for a given connection and re-asserting it
+        # lets us recover automatically when iio-sensor-proxy is restarted.
+        try:
+            self._claim_iface().ClaimLight()
+        except dbus.exceptions.DBusException as e:
+            if self.claimed:
+                log("lost light sensor claim:", e.get_dbus_message())
+            self.claimed = False
+            return False
+        if not self.claimed:
+            log("claimed ambient light sensor")
+            self.claimed = True
+        return True
+
+    def current_lux(self):
+        try:
+            props = dbus.Interface(
+                self.system_bus.get_object(SENSOR_SVC, SENSOR_PATH), PROPS_IFACE
+            )
+            return float(props.Get(SENSOR_IFACE, "LightLevel"))
+        except dbus.exceptions.DBusException:
+            return None
+
+    def _on_name_owner(self, name, old_owner, new_owner):
+        if new_owner and not old_owner:
+            log("sensor service (re)appeared")
+            self.ema = None
+            self.claimed = False
+            self.suspend_until = time.monotonic() + RESUME_DELAY
+
+    def _poll(self):
+        self._ensure_claim()
+        if time.monotonic() < self.suspend_until:
+            return True
+        lux = self.current_lux()
+        if lux is not None:
+            self._handle_lux(lux)
+        return True
+
+    # ---- sensor -> brightness ------------------------------------------
+    def _handle_lux(self, lux):
+        self.ema = lux if self.ema is None else (1 - EMA) * self.ema + EMA * lux
+        if time.monotonic() < self.manual_until:
+            return
+        self._apply(self._lux_to_frac(self.ema))
+
+    def _lux_to_frac(self, lux):
+        if lux <= MIN_LUX:
+            return MIN_FRAC
+        if lux >= MAX_LUX:
+            return 1.0
+        x = (math.log10(lux) - math.log10(MIN_LUX)) / (
+            math.log10(MAX_LUX) - math.log10(MIN_LUX)
+        )
+        return MIN_FRAC + x * (1.0 - MIN_FRAC)
+
+    # ---- brightness -----------------------------------------------------
+    def _on_pd_change(self, value):
+        value = int(value)
+        if self._setting is not None and abs(value - self._setting) <= 1:
+            return  # change we made ourselves
+        self.manual_until = time.monotonic() + MANUAL_PAUSE
+        log(f"manual brightness change -> {value}, pausing auto for {MANUAL_PAUSE:.0f}s")
+
+    def _apply(self, frac):
+        target = int(round(frac * self.bmax))
+        target = max(self.min_abs, min(self.bmax, target))
+        try:
+            cur = int(self.pd.brightness())
+        except dbus.exceptions.DBusException:
+            cur = None
+        if cur is not None and abs(target - cur) < max(1, int(HYST_FRAC * self.bmax)):
+            self._setting = cur
+            return
+        self._setting = target
+        try:
+            self.pd.setBrightness(dbus.Int32(target))
+            log(f"lux~{self.ema:.1f} -> {frac * 100:.0f}% ({target}/{self.bmax})")
+        except dbus.exceptions.DBusException as e:
+            log("setBrightness failed:", e.get_dbus_message())
+
+
+def main():
+    try:
+        ab = AutoBrightness()
+    except dbus.exceptions.DBusException as e:
+        log("cannot connect, will retry:", e.get_dbus_message())
+        return 1
+
+    if not ab._ensure_claim():
+        return 1
+
+    GLib.timeout_add(int(POLL * 1000), ab._poll)
+    loop = GLib.MainLoop()
+    try:
+        loop.run()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        try:
+            ab._claim_iface().ReleaseLight()
+        except Exception:
+            pass
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

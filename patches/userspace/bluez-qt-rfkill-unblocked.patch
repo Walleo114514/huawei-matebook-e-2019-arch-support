@@ -1,0 +1,23 @@
+diff --git a/src/rfkill.cpp b/src/rfkill.cpp
+index 2a050fe..5b42cfb 100644
+--- a/src/rfkill.cpp
++++ b/src/rfkill.cpp
+@@ -174,12 +174,18 @@ void Rfkill::init()
+ 
+     if (d->m_readFd == -1) {
+         qCWarning(BLUEZQT) << "Cannot open /dev/rfkill for reading!";
++        // No rfkill support in the kernel (e.g. CONFIG_RFKILL is disabled).
++        // Do not leave the state as Unknown: consumers such as the Bluetooth
++        // KCM would then show "No Bluetooth adapters found" even though the
++        // adapter exists. Assume Bluetooth is simply not blocked.
++        d->m_state = Unblocked;
+         return;
+     }
+ 
+     if (::fcntl(d->m_readFd, F_SETFL, O_NONBLOCK) < 0) {
+         ::close(d->m_readFd);
+         d->m_readFd = -1;
++        d->m_state = Unblocked;
+         return;
+     }
+ 

@@ -1,0 +1,34 @@
+Add libcamera CameraSensorHelper for gc5025 and s5k3l6xx.
+
+Without a sensor helper the software ISP (simple pipeline) cannot convert its
+target gain into the V4L2 controls, so AGC does nothing and the preview is
+black on the Huawei MateBook E 2019.  Both sensors follow the same
+"analogue gain control value = 32 * gain" scheme as the drivers expose it.
+
+--- a/src/ipa/libipa/camera_sensor_helper.cpp
++++ b/src/ipa/libipa/camera_sensor_helper.cpp
+@@ REGISTER_CAMERA_SENSOR_HELPER("gc08a3", CameraSensorHelperGc08a3)
++
++class CameraSensorHelperGc5025 : public CameraSensorHelper
++{
++public:
++	CameraSensorHelperGc5025()
++	{
++		/* Analogue gain: 0x20 (32) == 1x, as exposed by the kernel driver. */
++		gain_ = AnalogueGainLinear{ 1, 0, 0, 32 };
++	}
++};
++REGISTER_CAMERA_SENSOR_HELPER("gc5025", CameraSensorHelperGc5025)
++
++class CameraSensorHelperS5k3l6xx : public CameraSensorHelper
++{
++public:
++	CameraSensorHelperS5k3l6xx()
++	{
++		/* Analogue gain: 0x20 (32) == 1x, as exposed by the kernel driver. */
++		gain_ = AnalogueGainLinear{ 1, 0, 0, 32 };
++	}
++};
++REGISTER_CAMERA_SENSOR_HELPER("s5k3l6xx", CameraSensorHelperS5k3l6xx)
++
+ class CameraSensorHelperHm1246 : public CameraSensorHelper

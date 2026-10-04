@@ -1,0 +1,39 @@
+# Maintainer: MateBook E 2019 (PAK-AL09 / sdm850) support bundle
+# Builds a mainline-ish sdm845 kernel with the Huawei Planck patches.
+# Set _srcdir to an already-prepared source tree, or edit source=() to fetch.
+pkgname=matebook-e-2019-kernel
+pkgver=6.14.0_rc5
+pkgrel=1
+pkgdesc="Linux kernel for HUAWEI MateBook E 2019 (sdm850, mainline+sdm845 patches)"
+arch=('aarch64')
+url="https://github.com/New-Wheat/Linux-for-HUAWEI-MateBook-E-2019"
+license=('GPL2')
+depends=('mkinitcpio' 'linux-firmware' 'dtc')
+makedepends=('bc' 'flex' 'bison' 'pahole' 'git' 'python')
+options=('!strip' '!debug')
+
+# Point this at the prepared kernel source tree (with patches already applied):
+_srcdir=/home/walleo/kbuild-6.14/linux-sdm845-6.14-rc5-r2
+
+prepare() {
+	# patches are expected to be applied in _srcdir already; if not, apply here:
+	for p in "$startdir"/../patches/kernel/*.patch; do
+		[ -e "$p" ] && (cd "$srcdir" && patch -p1 -N < "$p") || true
+	done
+}
+
+build() {
+	cd "$srcdir"
+	cp /boot/config-6.14.0-rc5 .config 2>/dev/null || true
+	scripts/config --file .config --disable MODULE_SIG --disable MODVERSIONS || true
+	make ARCH=arm64 olddefconfig
+	make ARCH=arm64 -j"$(nproc)" Image modules dtbs
+}
+
+package() {
+	cd "$srcdir"
+	install -Dm644 arch/arm64/boot/Image "$pkgdir/boot/vmlinuz-6.14.0-rc5"
+	install -Dm644 arch/arm64/boot/dts/qcom/sdm850-huawei-matebook-e-2019.dtb \
+		"$pkgdir/boot/sdm850-huawei-matebook-e-2019.dtb"
+	make ARCH=arm64 INSTALL_MOD_PATH="$pkgdir/usr" INSTALL_MOD_STRIP=1 modules_install
+}

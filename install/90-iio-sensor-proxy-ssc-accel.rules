@@ -1,0 +1,9 @@
+# iio-sensor-proxy 3.9 udev rules only tag fastrpc-* with "ssc-light ssc-compass";
+# add the libssc accelerometer driver so the raw accelerometer is exposed too.
+SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{IIO_SENSOR_PROXY_TYPE}+="ssc-accel"
+# Huawei MateBook E 2019 (PAK-AL09): the SLPI/SSC accelerometer is mounted with
+# its X axis inverted relative to the panel, which made auto-rotation turn the
+# wrong way. The firmware placement matrix is all zeros, so provide it here.
+# Format: "rowX; rowY; rowZ" (see iio-sensor-proxy src/accel-mount-matrix.c).
+SUBSYSTEM=="misc", KERNEL=="fastrpc-*", ENV{ACCEL_MOUNT_MATRIX}="-1, 0, 0; 0, -1, 0; 0, 0, 1"
+TAG+="systemd", ENV{SYSTEMD_WANTS}+="iio-sensor-proxy.service"

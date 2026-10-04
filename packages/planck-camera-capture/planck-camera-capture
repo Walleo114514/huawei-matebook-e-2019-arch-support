@@ -1,0 +1,46 @@
+#!/bin/bash
+# Capture a single frame from the Huawei MateBook E 2019 REAR camera
+# (Samsung s5k3l6xx via qcom-camss) and save it as a debayered PNG.
+#
+# Usage: sudo planck-camera-capture [output.png]
+#
+# Notes:
+#  * The 1052x780 sensor mode is broken; 4208x3120 works.
+#  * There is no auto-exposure in the driver, so we crank exposure/gain up
+#    (otherwise the frame comes out black).
+set -eu
+OUT="${1:-/tmp/rear-$(date +%s).png}"
+M=/dev/media0
+F=SGRBG8_1X8
+W=4208
+H=3120
+
+# Clear any leftover per-link configuration.
+# NOTE: do NOT unbind/bind the qcom-camss driver: on this board that triggers
+# "Unbalanced pm_runtime_enable" followed by a kernel data abort (system hang).
+media-ctl -d /dev/media0 -r 2>/dev/null || true
+
+media-ctl -d "$M" -l '"msm_csiphy0":1->"msm_csid0":0[1]'
+media-ctl -d "$M" -l '"msm_csid0":1->"msm_vfe0_rdi0":0[1]'
+for spec in '"s5k3l6xx 18-0010":0' '"msm_csiphy0":0' '"msm_csid0":0' '"msm_vfe0_rdi0":0'; do
+	media-ctl -d "$M" -V "$spec[fmt:$F/${W}x${H}]"
+done
+
+# Find the s5k3l6xx subdev (the one exposing the 2..3118 exposure range) and
+# crank exposure/gain, since the driver has no auto-exposure.
+SENS=""
+for sd in /dev/v4l-subdev*; do
+	c=$(v4l2-ctl -d "$sd" --list-ctrls 2>/dev/null | grep -c 'exposure.*max=3118')
+	[ "$c" != "0" ] && SENS="$sd"
+done
+if [ -n "${SENS:-}" ]; then
+	v4l2-ctl -d "$SENS" --set-ctrl exposure=3118,analogue_gain=512,digital_gain=768 2>/dev/null || true
+	echo "sensor $SENS: $(v4l2-ctl -d "$SENS" --list-ctrls 2>/dev/null | grep -E 'exposure|analogue_gain' | tr -s ' ' | tr '\n' ' ')"
+fi
+
+v4l2-ctl -d /dev/video0 --set-fmt-video=width=$W,height=$H,pixelformat=GRBG
+v4l2-ctl -d /dev/video0 --stream-mmap --stream-count=1 --stream-to=/tmp/rear-cam.raw
+
+ffmpeg -y -loglevel error -f rawvideo -pix_fmt bayer_grbg8 -s ${W}x${H} \
+	-i /tmp/rear-cam.raw -frames:v 1 "$OUT"
+echo "saved $OUT"

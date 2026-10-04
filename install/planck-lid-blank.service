@@ -1,0 +1,13 @@
+[Unit]
+Description=Blank Huawei MateBook E EC backlight on lid close
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/planck-lid-blank.sh
+Restart=always
+RestartSec=2
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

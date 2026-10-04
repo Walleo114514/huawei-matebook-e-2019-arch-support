@@ -1,0 +1,24 @@
+# libcamera with CameraSensorHelper for gc5025 / s5k3l6xx (software-ISP AGC fix).
+pkgname=libcamera-sensor-helper
+pkgver=0.7.2
+pkgrel=1
+pkgdesc="libcamera with gc5025/s5k3l6xx CameraSensorHelper (fixes AGC/black preview)"
+arch=('aarch64')
+url="https://libcamera.org"
+license=('LGPL2.1')
+depends=('libevent' 'gnutls' 'libyaml' 'libgnutls' 'libudev' 'openssl')
+makedepends=('meson' 'ninja' 'python-yaml' 'python-jinja' 'python-ply' 'git')
+source=("https://github.com/libcamera-org/libcamera/archive/v0.7.2/libcamera-0.7.2.tar.gz"
+        "libcamera-sensor-helper-gc5025-s5k3l6xx.patch")
+sha256sums=('SKIP' 'SKIP')
+
+prepare() { cd "libcamera-0.7.2"; patch -p1 -N < "$srcdir/libcamera-sensor-helper-gc5025-s5k3l6xx.patch"; }
+build() {
+	cd "libcamera-0.7.2"
+	meson setup build -Dpipelines=simple,rkisp1 -Dipas=simple -Dcam=enabled \
+		-Ddocumentation=disabled -Dpycamera=disabled -Dgstreamer=disabled
+	ninja -C build
+}
+package() { cd "libcamera-0.7.2"; DESTDIR="$pkgdir" ninja -C build install; }
+# Minimal alternative (no full rebuild): rebuild only the soft ISP IPA and
+# drop it into /usr/lib/libcamera/ipa/ipa_soft_simple.so (+ .sign).

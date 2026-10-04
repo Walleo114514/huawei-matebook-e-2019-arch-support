@@ -1,0 +1,13 @@
+[Unit]
+Description=Ambient-light auto-brightness (Huawei MateBook E 2019)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/planck-autobrightness
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

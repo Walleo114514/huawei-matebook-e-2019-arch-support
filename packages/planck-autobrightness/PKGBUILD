@@ -1,0 +1,17 @@
+# Ambient-light auto-brightness for the MateBook E 2019.
+pkgname=planck-autobrightness
+pkgver=1
+pkgrel=1
+pkgdesc="Ambient-light auto-brightness for HUAWEI MateBook E 2019 (iio-sensor-proxy + PowerDevil)"
+arch=('any')
+license=('MIT')
+depends=('python' 'python-dbus' 'python-gobject' 'iio-sensor-proxy' 'powerdevil')
+source=('planck-autobrightness' 'planck-autobrightness.service')
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+	install -Dm0755 "$srcdir/planck-autobrightness" "$pkgdir/usr/local/bin/planck-autobrightness"
+	install -Dm0644 "$srcdir/planck-autobrightness.service" \
+		"$pkgdir/usr/lib/systemd/user/planck-autobrightness.service"
+}
+# Enable per user after install:  systemctl --user enable --now planck-autobrightness
