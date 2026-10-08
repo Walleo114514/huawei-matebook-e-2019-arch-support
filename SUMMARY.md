@@ -86,7 +86,7 @@ systemctl disable --now planck-slpi-reinit.service
 ```
 
 ### 9. 静态度 IP（NetworkManager）
-`chb666` 连接改为 `192.168.101.194/24`，网关/DNS `192.168.101.1`。
+wifi 连接改为 `192.168.101.194/24`，网关/DNS `192.168.101.1`。
 见 `install/set-static-ip.sh`（按自己的网段改）。
 
 ---
